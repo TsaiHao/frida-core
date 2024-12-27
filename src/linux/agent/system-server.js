@@ -178,7 +178,7 @@ rpc.exports = {
 
     return result;
   },
-  startActivity(pkgName, activity, uid) {
+  startActivity(pkgName, activity, uid, action, category, data) {
     checkUidOptionSupported(uid);
 
     return performOnJavaVM(() => {
@@ -228,6 +228,17 @@ rpc.exports = {
           throw new Error("Unable to find activity with identifier '" + activity + "'");
 
         intent.setClassName(pkgName, activity);
+      }
+
+      if (action)
+        intent.setAction(action);
+
+      if (category)
+        intent.addCategory(category);
+
+      if (data) {
+        const Uri = Java.use('android.net.Uri');
+        intent.setData(Uri.parse(data));
       }
 
       performLaunchOperation(pkgName, uid, () => {

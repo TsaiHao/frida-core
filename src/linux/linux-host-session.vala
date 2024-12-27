@@ -118,6 +118,7 @@ namespace Frida {
 		}
 
 		construct {
+			printerr("LinuxHostSession.construct\n");
 			helper.output.connect (on_output);
 
 			injector = new Linjector (helper, false, tempdir);
@@ -363,6 +364,7 @@ namespace Frida {
 		public override async uint spawn (string program, HostSpawnOptions options, Cancellable? cancellable)
 				throws Error, IOError {
 #if ANDROID
+		    printerr("LinuxHostSession.spawn\n");
 			if (!program.has_prefix ("/"))
 				return yield robo_launcher.spawn (program, options, cancellable);
 #endif
@@ -604,7 +606,9 @@ namespace Frida {
 			if (options.stdio != INHERIT)
 				throw new Error.NOT_SUPPORTED ("Redirected stdio is not supported when spawning Android apps");
 
+			printerr("start parse\n");
 			var entrypoint = PackageEntrypoint.parse (package, options);
+			printerr("end parse\n");
 
 			yield ensure_loaded (cancellable);
 
@@ -621,6 +625,7 @@ namespace Frida {
 			uint pid = 0;
 			try {
 				yield system_server_agent.stop_package (package, entrypoint.uid, cancellable);
+				printerr("RoboLauncher.spawn_package\n");
 				yield system_server_agent.start_package (package, entrypoint, cancellable);
 
 				var timeout = new TimeoutSource.seconds (20);
@@ -987,9 +992,14 @@ namespace Frida {
 			} else if (entrypoint is ActivityEntrypoint) {
 				var e = entrypoint as ActivityEntrypoint;
 
+				printerr("start_package.ActivityEntrypoint\n");
 				var activity_node = new Json.Node.alloc ().init_string (e.activity);
+				var action_node = new Json.Node.alloc ().init_string (e.action);
+				var category_node = new Json.Node.alloc ().init_string (e.category);
+				var data_node = new Json.Node.alloc ().init_string (e.data);
 
-				yield call ("startActivity", new Json.Node[] { package_node, activity_node, uid_node }, null, cancellable);
+				printerr("start_package.ActivityEntrypoint2\n");
+				yield call ("startActivity", new Json.Node[] { package_node, activity_node, uid_node, action_node, category_node, data_node }, null, cancellable);
 			} else if (entrypoint is BroadcastReceiverEntrypoint) {
 				var e = entrypoint as BroadcastReceiverEntrypoint;
 
@@ -1630,12 +1640,16 @@ namespace Frida {
 					throw new Error.INVALID_ARGUMENT ("The 'activity' option must be a string");
 				string activity = canonicalize_class_name (activity_value.get_string (), package);
 
-				if (aux.contains ("action")) {
-					throw new Error.INVALID_ARGUMENT (
-						"The 'action' option should only be specified when a 'receiver' is specified");
-				}
+				Variant? category_value = aux["category"];
+				string? category = category_value != null ? category_value.get_string () : "";
 
-				entrypoint = new ActivityEntrypoint (activity);
+				Variant? data_value = aux["data"];
+				string? data = data_value != null ? data_value.get_string () : "";
+
+				Variant? action_value = aux["action"];
+				string? action = action_value != null ? action_value.get_string () : "";
+
+				entrypoint = new ActivityEntrypoint (activity, action, category, data);
 			}
 
 			Variant? receiver_value = aux["receiver"];
@@ -1685,8 +1699,25 @@ namespace Frida {
 			construct;
 		}
 
-		public ActivityEntrypoint (string activity) {
-			Object (activity: activity);
+		public string action {
+			get;
+			construct;
+		}
+
+		public string category {
+			get;
+			construct;
+		}
+
+		public string data {
+			get;
+			construct;
+		}
+
+		// TODO: Extras
+
+		public ActivityEntrypoint (string activity, string action, string category, string data) {
+			Object (activity: activity, action: action, category: category, data: data);
 		}
 	}
 
